@@ -204,11 +204,10 @@ void gemm_nn_custom_bin_mean(int M, int N, int K, float ALPHA_UNUSED,
 {
     int *count_arr = calloc(M*N, sizeof(int));
 
-    int i;
+    int i, j, k, h;
 
 #pragma omp parallel for
     for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        int j, k, h;
         for (k = 0; k < K; ++k) {   // l.size*l.size*l.c - one filter size [27 - 9216]
             const char a_bit = get_bit(A, i*lda + k);
             uint64_t a_bit64 = fill_bit_int64(a_bit);
@@ -272,11 +271,10 @@ void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
     unsigned char *B, int ldb,
     float *C, int ldc, float *mean_arr)
 {
-    int i;
+    int i, j, k, h;
 
 #pragma omp parallel for
     for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        int j, k, h;
         float mean_val = mean_arr[i];
 
         for (j = 0; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
@@ -367,7 +365,7 @@ void transpose_bin(char *A, char *B, const int n, const int m,
     const int lda, const int ldb, const int block_size)
 {
     int i;
-    #pragma omp parallel for
+#pragma omp parallel for
     for (i = 0; i < n; i += 8) {
         int j;
         for (j = 0; j < m - 8; j += 8) {
@@ -619,14 +617,14 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 void convolution_2d_old(int w, int h, int ksize, int n, int c, int pad, int stride,
     float *weights, float *input, float *output)
 {
-    const int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
-    const int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
+    int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
+    int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
+    int i, f, j;
 
     int fil;
     // filter index
-    #pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
+#pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
     for (fil = 0; fil < n; ++fil) {
-        //int i, f, j;
         int chan, y, x, f_y, f_x;
         // channel index
         for (chan = 0; chan < c; ++chan)
@@ -667,9 +665,9 @@ void convolution_2d_old(int w, int h, int ksize, int n, int c, int pad, int stri
 void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
     float *weights, float *input, float *output, float *mean)
 {
-    const int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
-    const int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
-    int i;
+    int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
+    int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
+    int i, f, j;
 
 #if defined(_OPENMP)
     static int max_num_threads = 0;
@@ -686,9 +684,9 @@ void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
         *((__m256*)&weights[i]) = _mm256_and_ps(*((__m256*)&weights[i]), _mm256_castsi256_ps(all256_sing1));
     }
 
-    //for (i = 0; i < w*h*c; i += 8) {
+    for (i = 0; i < w*h*c; i += 8) {
         //*((__m256*)&input[i]) = _mm256_and_ps(*((__m256*)&input[i]), _mm256_castsi256_ps(all256_sing1));
-    //}
+    }
 
 
     //__m256i all256_last_zero = _mm256_set1_epi32(0xFFFFFFFF);
@@ -706,7 +704,7 @@ void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
 
     int fil;
     // filter index
-    #pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
+#pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
     for (fil = 0; fil < n; ++fil) {
         int chan, y, x, f_y, f_x;
         float cur_mean = fabs(mean[fil]);
@@ -916,17 +914,16 @@ void im2col_cpu_custom_transpose(float* data_im,
     int channels, int height, int width,
     int ksize, int stride, int pad, float* data_col, int ldb_align)
 {
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
-    int c;
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1)
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1008,7 +1005,6 @@ void im2col_cpu_custom_transpose(float* data_im,
     else {
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1033,17 +1029,17 @@ void im2col_cpu_custom(float* data_im,
     int channels, int height, int width,
     int ksize, int stride, int pad, float* data_col)
 {
-    int c;
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
+
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1 && is_fma_avx2())
     {
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1125,10 +1121,10 @@ void im2col_cpu_custom_align(float* data_im,
     int channels, int height, int width,
     int ksize, int stride, int pad, float* data_col, int bit_align)
 {
-    int c;
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1 && is_fma_avx2())
@@ -1137,7 +1133,6 @@ void im2col_cpu_custom_align(float* data_im,
 
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1223,10 +1218,10 @@ void im2col_cpu_custom_bin(float* data_im,
     int channels, int height, int width,
     int ksize, int stride, int pad, float* data_col, int bit_align)
 {
-    int c;
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1 && is_fma_avx2())
@@ -1238,7 +1233,6 @@ void im2col_cpu_custom_bin(float* data_im,
 
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1457,8 +1451,8 @@ void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, i
     int pad, int stride, int batch)
 {
 
-    const int w_offset = -pad / 2;
-    const int h_offset = -pad / 2;
+    int w_offset = -pad / 2;
+    int h_offset = -pad / 2;
     int b, k;
 
     for (b = 0; b < batch; ++b) {
@@ -1557,9 +1551,11 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     int i, j, k;
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
-            register float A_PART = ALPHA*A[i*lda + k];
+
+            register int A_PART = float2fix(ALPHA)*float2fix(A[i*lda + k]);
+
             for (j = 0; j < N; ++j) {
-                C[i*ldc + j] += A_PART*B[k*ldb + j];
+                C[i*ldc + j] += int2fix(A_PART*float2fix(B[k*ldb + j]));
             }
         }
     }
@@ -1569,13 +1565,13 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
     float *weights, float *input, float *output, float *mean)
 {
-    const int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
-    const int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
-    //int i, f, j;
+    int out_h = (h + 2 * pad - ksize) / stride + 1;    // output_height=input_height for stride=1 and pad=1
+    int out_w = (w + 2 * pad - ksize) / stride + 1;    // output_width=input_width for stride=1 and pad=1
+    int i, f, j;
 
     int fil;
     // filter index
-    #pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
+#pragma omp parallel for      // "omp parallel for" - automatic parallelization of loop by using OpenMP
     for (fil = 0; fil < n; ++fil) {
         int chan, y, x, f_y, f_x;
         // channel index
@@ -1619,11 +1615,10 @@ void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
     unsigned char *B, int ldb,
     float *C, int ldc, float *mean_arr)
 {
-    int i;
+    int i, j, k, h;
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        int j, k;
         float mean_val = mean_arr[i];
 
         for (j = 0; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
@@ -1667,17 +1662,16 @@ void im2col_cpu_custom(float* data_im,
     im2col_cpu(data_im, channels, height, width, ksize, stride, pad, data_col);
     return;
 
-    int c;
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1)
     {
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1758,10 +1752,10 @@ void im2col_cpu_custom_bin(float* data_im,
     int channels, int height, int width,
     int ksize, int stride, int pad, float* data_col, int bit_align)
 {
-    int c;
-    const int height_col = (height + 2 * pad - ksize) / stride + 1;
-    const int width_col = (width + 2 * pad - ksize) / stride + 1;
-    const int channels_col = channels * ksize * ksize;
+    int c, h, w;
+    int height_col = (height + 2 * pad - ksize) / stride + 1;
+    int width_col = (width + 2 * pad - ksize) / stride + 1;
+    int channels_col = channels * ksize * ksize;
 
     // optimized version
     if (height_col == height && width_col == width && stride == 1 && pad == 1)
@@ -1770,7 +1764,6 @@ void im2col_cpu_custom_bin(float* data_im,
 
         #pragma omp parallel for
         for (c = 0; c < channels_col; ++c) {
-            int h, w;
             int w_offset = c % ksize;
             int h_offset = (c / ksize) % ksize;
             int c_im = c / ksize / ksize;
@@ -1915,10 +1908,9 @@ void float_to_bit(float *src, unsigned char *dst, size_t size)
 
 static inline void transpose_scalar_block(float *A, float *B, const int lda, const int ldb, const int block_size)
 {
-    int i;
+    int i, j;
     //#pragma omp parallel for
     for (i = 0; i<block_size; i++) {
-        int j;
         for (j = 0; j<block_size; j++) {
             B[j*ldb + i] = A[i*lda + j];
         }
@@ -1948,8 +1940,8 @@ void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, i
     int pad, int stride, int batch)
 {
     int b, k;
-    const int w_offset = -pad / 2;
-    const int h_offset = -pad / 2;
+    int w_offset = -pad / 2;
+    int h_offset = -pad / 2;
 
     for (b = 0; b < batch; ++b) {
         #pragma omp parallel for
@@ -1992,7 +1984,7 @@ void gemm_nt(int M, int N, int K, float ALPHA,
         for(j = 0; j < N; ++j){
             register float sum = 0;
             for(k = 0; k < K; ++k){
-                sum += ALPHA*A[i*lda+k]*B[j*ldb + k];
+                sum += int2fix(float2fix(ALPHA)*float2fix(A[i*lda+k])*float2fix(B[j*ldb + k]));
             }
             C[i*ldc+j] += sum;
         }
@@ -2007,9 +1999,9 @@ void gemm_tn(int M, int N, int K, float ALPHA,
     int i,j,k;
     for(i = 0; i < M; ++i){
         for(k = 0; k < K; ++k){
-            register float A_PART = ALPHA*A[k*lda+i];
+            register int A_PART = float2fix(ALPHA)*float2fix(A[k*lda+i]);
             for(j = 0; j < N; ++j){
-                C[i*ldc+j] += A_PART*B[k*ldb+j];
+                C[i*ldc+j] += int2fix(A_PART*float2fix(B[k*ldb+j]));
             }
         }
     }
@@ -2025,7 +2017,7 @@ void gemm_tt(int M, int N, int K, float ALPHA,
         for(j = 0; j < N; ++j){
             register float sum = 0;
             for(k = 0; k < K; ++k){
-                sum += ALPHA*A[i+k*lda]*B[k+j*ldb];
+                sum += int2fix(float2fix(ALPHA)*float2fix(A[i+k*lda])*float2fix(B[k+j*ldb]));
             }
             C[i*ldc+j] += sum;
         }
@@ -2039,6 +2031,8 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc)
 {
+    float2fix(&A);
+
     //printf("cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
     if (BETA != 1){
         int i, j;

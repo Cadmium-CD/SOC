@@ -4,6 +4,48 @@
 #include <stdint.h>
 #include <stddef.h>
 
+int roundup(float *fp_number)
+{
+    int fx_number   =   (int)fp_number;
+
+    if(fp_number-fx_number>=0.5)    fx_number++;
+
+    return  fx_number;
+}
+
+int float2fix(float FixedPointValue)
+{
+    // how to compute 0.213 * 500 in fixed point?
+    
+    //float FloatPointValue = 0.213;
+    int result;
+    int scale = 9;
+            result = roundup(FloatPointValue*(1<<scale));
+            return result;
+            //*FixedPointValue = (float)(*FixedPointValue)/(1<<scale);
+    // mapping
+    
+    
+    // here is your fixed point algorithm
+    //FixedPointValue = FixedPointValue * 500;
+    
+    // remapping
+    
+    
+    // printing result
+    // printf("%.10f\n",FloatPointValue*500);
+    // printf("%.10f\n",result);
+    // return result;
+}
+
+float int2fix(int IntValue)
+{
+    int scale = 9;
+    float results;
+     results = (float)(IntValue)/(1<<scale);
+     return results;
+}
+
 void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
     float *weights, float *input, float *output, float *mean);
 
