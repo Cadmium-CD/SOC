@@ -12,6 +12,23 @@
 #include <omp.h>
 #endif
 
+
+int float2fix(float FloatPointValue)
+{
+    int scale = 8;
+    int result = (int)round(FloatPointValue*(1<<scale));
+    return result;
+       
+    
+}
+
+float fix2float(int fixValue)
+{
+    int scale = 8;
+    float results = (float)(fixValue)/(1<<scale);
+    return results;
+}
+
 void gemm_bin(int M, int N, int K, float ALPHA,
         char  *A, int lda,
         float *B, int ldb,
@@ -1548,14 +1565,26 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float *B, int ldb,
     float *C, int ldc)
 {
+		int ALPHA_1 = float2fix(ALPHA);
+		
     int i, j, k;
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
-
-            register int A_PART = float2fix(ALPHA)*float2fix(A[i*lda + k]);
+            register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]))/(1<<8);
+						//A_PART = fix2float(A_PART);
+						//A_PART = fix2float(A_PART);
+						register float A_PART = ALPHA*A[i*lda + k];
+						/*printf("a = %f Alpha_1 = %d fixa = %f fix1apart= %f\n",A[i*lda + k],ALPHA_1,float2fix(A[i*lda + k]),fix2float(ALPHA_1*float2fix(A[i*lda + k])));
+						printf("a_new = %f a_old = %g \n", A_PART_1, A_PART);
+						if(A_PART != A_PART_1){
+						exit(0);
+						}*/
 
             for (j = 0; j < N; ++j) {
-                C[i*ldc + j] += int2fix(A_PART*float2fix(B[k*ldb + j]));
+								C[i*ldc + j] += A_PART_1*B[k*ldb + j];
+								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
+                /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
+								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
             }
         }
     }
@@ -1984,7 +2013,10 @@ void gemm_nt(int M, int N, int K, float ALPHA,
         for(j = 0; j < N; ++j){
             register float sum = 0;
             for(k = 0; k < K; ++k){
-                sum += int2fix(float2fix(ALPHA)*float2fix(A[i*lda+k])*float2fix(B[j*ldb + k]));
+                /*sum += float2fix(float2fix(ALPHA)*float2fix(A[i*lda+k])*float2fix(B[j*ldb + k]));
+								A[i*lda + k] = fix2float(A[i*lda + k]);
+								B[j*ldb + k] = fix2float(B[j*ldb + k]);*/
+								sum += ALPHA*A[i*lda+k]*B[j*ldb + k];
             }
             C[i*ldc+j] += sum;
         }
@@ -1999,9 +2031,14 @@ void gemm_tn(int M, int N, int K, float ALPHA,
     int i,j,k;
     for(i = 0; i < M; ++i){
         for(k = 0; k < K; ++k){
-            register int A_PART = float2fix(ALPHA)*float2fix(A[k*lda+i]);
+            /*register int A_PART = float2fix(ALPHA)*float2fix(A[k*lda+i]);
+						A[k*lda + i] = fix2float(A[k*lda + i]);*/
+						register float A_PART = ALPHA*A[k*lda+i];
             for(j = 0; j < N; ++j){
-                C[i*ldc+j] += int2fix(A_PART*float2fix(B[k*ldb+j]));
+                /*C[i*ldc+j] += fix2float(A_PART*float2fix(B[k*ldb+j]));
+								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
+								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
+								C[i*ldc+j] += A_PART*B[k*ldb+j];
             }
         }
     }
@@ -2017,7 +2054,10 @@ void gemm_tt(int M, int N, int K, float ALPHA,
         for(j = 0; j < N; ++j){
             register float sum = 0;
             for(k = 0; k < K; ++k){
-                sum += int2fix(float2fix(ALPHA)*float2fix(A[i+k*lda])*float2fix(B[k+j*ldb]));
+                /*sum += fix2float(float2fix(ALPHA)*float2fix(A[i+k*lda])*float2fix(B[k+j*ldb]));
+								A[k*lda + i] = fix2float(A[k*lda + i]);
+								B[j*ldb + k] = fix2float(B[j*ldb + k]);*/
+								sum += ALPHA*A[i+k*lda]*B[k+j*ldb];
             }
             C[i*ldc+j] += sum;
         }
@@ -2031,7 +2071,6 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc)
 {
-    float2fix(&A);
 
     //printf("cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
     if (BETA != 1){
