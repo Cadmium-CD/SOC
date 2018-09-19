@@ -12,10 +12,19 @@
 #include <omp.h>
 #endif
 
+int roundup(float fp_number)
+{
+	int	fx_number	=	(int)fp_number;
+
+	if(fp_number-fx_number>=0.5)	fx_number++;
+
+	return	fx_number;
+
+}
 
 int float2fix(float FloatPointValue)
 {
-    int scale = 8;
+    int scale = 6;
     int result = (int)round(FloatPointValue*(1<<scale));
     return result;
        
@@ -24,7 +33,7 @@ int float2fix(float FloatPointValue)
 
 float fix2float(int fixValue, int index)
 {
-    int scale = 8;
+    int scale = 6;
     float results = (float)(fixValue)/(1<<(scale * index));
     return results;
 }
@@ -1608,19 +1617,30 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float *C, int ldc)
 {
 		int ALPHA_1 = float2fix(ALPHA);
+
 		
-    int i, j, k;
-    int B_1[N*K];
-    for(int q = 0; q < K*N; q++)
-    {
-        B_1[q] = (int)round(B[q] * (1 << 8));
-    }
+    int i, j, k, q, p;
+    int A_1[M*K];
+		for(q=0;q<M*K;q++)
+		{
+			A_1[q] = (int)round(A[q] * (1 << 6));
+		}
+
+	for (p = 0; p < N*K;p++)
+	{
+		B[p] = (int)(B[p] * (1 << 6));
+	}
+    //int B_1[N*K];
+    // for(q = 0; q < K*N; q++)
+    // {
+    //     B_1[q] = roundup(B[q] * (1 << 8));
+    // }
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
-            register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
-
+		    //register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
+    		  register float A_PART_1 = (float)(ALPHA_1*A_1[i*lda + k])/(1 << 12);
             for (j = 0; j < N; ++j) {
-								C[i*ldc + j] += fix2float(float2fix(A_PART_1)*B_1[k*ldb + j],2);
+				C[i*ldc + j] += (float)(float2fix(A_PART_1) * B[k*ldb + j])/(1<<12);
 								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
                 /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
 								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
