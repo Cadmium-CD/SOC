@@ -24,16 +24,16 @@ int roundup(float fp_number)
 
 int float2fix(float FloatPointValue)
 {
-    int scale = 6;
+    int scale = 8;
     int result = (int)round(FloatPointValue*(1<<scale));
     return result;
-       
-    
+
+
 }
 
 float fix2float(int fixValue, int index)
 {
-    int scale = 6;
+    int scale = 8;
     float results = (float)(fixValue)/(1<<(scale * index));
     return results;
 }
@@ -896,7 +896,7 @@ void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
                 __m256i xor256 = _mm256_xor_si256(a_bit256, b_bit256);  // xnor = not(xor(a,b))
                 __m256i c_bit256 = _mm256_andnot_si256(xor256, all_1);  // can be optimized - we can do other NOT for wegihts once and do not do this NOT
 
-                count_sum = _mm256_add_epi64(count256(c_bit256), count_sum);    //  Mula’s algorithm
+                count_sum = _mm256_add_epi64(count256(c_bit256), count_sum);    //  Mulaï¿½s algorithm
 
                 //count += popcnt256(c_bit256);
 
@@ -1584,19 +1584,19 @@ void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, i
 //     for(int q = 0; q < K*N; q++)
 //     {
 //         B_1[q] = (int)round(B[q] * (1 << 8));
-    
+
 //         printf("B = %f B_1 = %d\n",B[q],B_1[q]);
 //     }
 //         int ALPHA_1 = float2fix(ALPHA);
-        
-        
+
+
 //         // int C_1 = (int)(C * (1 << 8));
-        
+
 //     int i, j, k;
-//     for (i = 0; i < M; ++i) { 
+//     for (i = 0; i < M; ++i) {
 //         for (k = 0; k < K; ++k) {
 //             //register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
-//             // A_1 = (int)round(A[i*lda + k] * (1<< 8));               
+//             // A_1 = (int)round(A[i*lda + k] * (1<< 8));
 //             //register float A_PART_1 = (float)(A_1[i*lda + k] * ALPHA_1)/(1<<16);
 //             register int A_PART_1 = A_1[i*lda + k] * ALPHA_1;
 
@@ -1618,17 +1618,19 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 {
 		int ALPHA_1 = float2fix(ALPHA);
 
-		
+
     int i, j, k, q, p;
     int A_1[M*K];
 		for(q=0;q<M*K;q++)
 		{
-			A_1[q] = (int)round(A[q] * (1 << 6));
+			A_1[q] = (int)round(A[q] * (1 << 8));
 		}
 
 	for (p = 0; p < N*K;p++)
 	{
-		B[p] = (int)(B[p] * (1 << 6));
+    //if(p<1010 & p>1000) printf("float = %f  ", B[p]);
+		B[p] =(int) (B[p] * (1 << 8));
+    //if(p<1010 & p>1000) printf("fix = %d\n", B[p]);
 	}
     //int B_1[N*K];
     // for(q = 0; q < K*N; q++)
@@ -1638,15 +1640,21 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
 		    //register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
-    		  register float A_PART_1 = (float)(ALPHA_1*A_1[i*lda + k])/(1 << 12);
+    		  register float A_PART_1 = (float)(ALPHA_1*A_1[i*lda + k])/(1 << 16);
             for (j = 0; j < N; ++j) {
-				C[i*ldc + j] += (float)(float2fix(A_PART_1) * B[k*ldb + j])/(1<<12);
+				C[i*ldc + j] += (float)(float2fix(A_PART_1) * B[k*ldb + j])/(1<<16);
 								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
                 /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
 								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
             }
         }
     }
+		for (p = 0; p < N*K;p++)
+		{
+			//if(p<1010 & p>1000) printf("float = %f  ", B[p]);
+			B[p] =((float)B[p] / (1 << 8));
+			//if(p<1010 & p>1000) printf("fix = %d\n", B[p]);
+		}
 }
 
 
@@ -2330,4 +2338,3 @@ int test_gpu_blas()
     return 0;
 }
 #endif
-
