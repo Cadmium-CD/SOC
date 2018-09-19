@@ -22,10 +22,10 @@ int float2fix(float FloatPointValue)
     
 }
 
-float fix2float(int fixValue)
+float fix2float(int fixValue, int index)
 {
     int scale = 8;
-    float results = (float)(fixValue)/(1<<scale);
+    float results = (float)(fixValue)/(1<<(scale * index));
     return results;
 }
 
@@ -1560,6 +1560,48 @@ void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, i
 
 #else
 
+
+// void gemm_nn(int M, int N, int K, float ALPHA,
+//     float *A, int lda,
+//     float *B, int ldb,
+//     float *C, int ldc)
+// {
+//     int A_1[M*K];
+//     int B_1[K*N];
+//     for(int p = 0; p < M*K; p++)
+//     {
+//         A_1[p] = (int)round(A[p] * (1 << 8));
+//     }
+//     for(int q = 0; q < K*N; q++)
+//     {
+//         B_1[q] = (int)round(B[q] * (1 << 8));
+    
+//         printf("B = %f B_1 = %d\n",B[q],B_1[q]);
+//     }
+//         int ALPHA_1 = float2fix(ALPHA);
+        
+        
+//         // int C_1 = (int)(C * (1 << 8));
+        
+//     int i, j, k;
+//     for (i = 0; i < M; ++i) { 
+//         for (k = 0; k < K; ++k) {
+//             //register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
+//             // A_1 = (int)round(A[i*lda + k] * (1<< 8));               
+//             //register float A_PART_1 = (float)(A_1[i*lda + k] * ALPHA_1)/(1<<16);
+//             register int A_PART_1 = A_1[i*lda + k] * ALPHA_1;
+
+//             for (j = 0; j < N; ++j) {
+//                 //B_1 = (int)round(B[k*ldb + j] * (1<< 8));
+//                                 C[i*ldc + j] += (float)(A_PART_1 * B_1[k*ldb + j])/(1 << 24);
+
+//                                 //C[i*ldc + j] = fix2float(C[i*ldc + j]);
+//                 /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
+//                                 B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
+//             }
+//         }
+//     }
+// }
 void gemm_nn(int M, int N, int K, float ALPHA,
     float *A, int lda,
     float *B, int ldb,
@@ -1568,20 +1610,17 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 		int ALPHA_1 = float2fix(ALPHA);
 		
     int i, j, k;
+    int B_1[N*K];
+    for(int q = 0; q < K*N; q++)
+    {
+        B_1[q] = (int)round(B[q] * (1 << 8));
+    }
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
-            register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]))/(1<<8);
-						//A_PART = fix2float(A_PART);
-						//A_PART = fix2float(A_PART);
-						register float A_PART = ALPHA*A[i*lda + k];
-						/*printf("a = %f Alpha_1 = %d fixa = %f fix1apart= %f\n",A[i*lda + k],ALPHA_1,float2fix(A[i*lda + k]),fix2float(ALPHA_1*float2fix(A[i*lda + k])));
-						printf("a_new = %f a_old = %g \n", A_PART_1, A_PART);
-						if(A_PART != A_PART_1){
-						exit(0);
-						}*/
+            register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
 
             for (j = 0; j < N; ++j) {
-								C[i*ldc + j] += A_PART_1*B[k*ldb + j];
+								C[i*ldc + j] += fix2float(float2fix(A_PART_1)*B_1[k*ldb + j],2);
 								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
                 /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
 								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
