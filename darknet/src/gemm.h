@@ -17,7 +17,7 @@
 
 int float2fix(float FloatPointValue);
 
-float fix2float(int fixValue);
+float fix2float(int fixValue, int index);
 
 
 void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
