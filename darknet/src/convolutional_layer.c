@@ -257,8 +257,9 @@ void cudnn_convolutional_setup(layer *l, int cudnn_preference)
 #endif
 #endif
 
-convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int n, int size, int stride, int padding, ACTIVATION activation, int batch_normalize, int binary, int xnor, int adam)
+convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int n, int size, int stride, int padding, ACTIVATION activation, int batch_normalize, int binary, int xnor, int adam, int use_bin_output)
 {
+    //printf("make_convolutional_layer\n");
     int i;
     convolutional_layer l = {0};
     l.type = CONVOLUTIONAL;
@@ -269,17 +270,18 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.n = n;
     l.binary = binary;
     l.xnor = xnor;
+    l.use_bin_output = use_bin_output;
     l.batch = batch;
     l.stride = stride;
     l.size = size;
     l.pad = padding;
     l.batch_normalize = batch_normalize;
 
-    l.weights = calloc(c*n*size*size, sizeof(float));
-    l.weight_updates = calloc(c*n*size*size, sizeof(float));
+    l.weights = malloc(c*n*size*size*sizeof(float));
+    l.weight_updates = malloc(c*n*size*size*sizeof(float));
 
-    l.biases = calloc(n, sizeof(float));
-    l.bias_updates = calloc(n, sizeof(float));
+    l.biases = malloc(n*sizeof(float));
+    l.bias_updates = malloc(n*sizeof(float));
 
     // float scale = 1./sqrt(size*size*c);
     float scale = sqrt(2./(size*size*c));
@@ -292,48 +294,48 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
     l.outputs = l.out_h * l.out_w * l.out_c;
     l.inputs = l.w * l.h * l.c;
 
-    l.output = calloc(l.batch*l.outputs, sizeof(float));
-    l.delta  = calloc(l.batch*l.outputs, sizeof(float));
+    l.output = malloc(l.batch*l.outputs*sizeof(float));
+    l.delta  = malloc(l.batch*l.outputs*sizeof(float));
 
     l.forward = forward_convolutional_layer;
     l.backward = backward_convolutional_layer;
     l.update = update_convolutional_layer;
     if(binary){
-        l.binary_weights = calloc(c*n*size*size, sizeof(float));
-        l.cweights = calloc(c*n*size*size, sizeof(char));
-        l.scales = calloc(n, sizeof(float));
+        l.binary_weights = malloc(c*n*size*size*sizeof(float));
+        l.cweights = malloc(c*n*size*size*sizeof(char));
+        l.scales = malloc(n*sizeof(float));
     }
     if(xnor){
-        l.binary_weights = calloc(c*n*size*size, sizeof(float));
-        l.binary_input = calloc(l.inputs*l.batch, sizeof(float));
+        l.binary_weights = malloc(c*n*size*size*sizeof(float));
+        l.binary_input = malloc(l.inputs*l.batch*sizeof(float));
 
-        int align = 8;
+        int align = 32;// 8;
         int src_align = l.out_h*l.out_w;
         l.bit_align = src_align + (align - src_align % align);
     }
 
     if(batch_normalize){
-        l.scales = calloc(n, sizeof(float));
-        l.scale_updates = calloc(n, sizeof(float));
+        l.scales = malloc(n*sizeof(float));
+        l.scale_updates = malloc(n*sizeof(float));
         for(i = 0; i < n; ++i){
             l.scales[i] = 1;
         }
 
-        l.mean = calloc(n, sizeof(float));
-        l.variance = calloc(n, sizeof(float));
+        l.mean = malloc(n*sizeof(float));
+        l.variance = malloc(n*sizeof(float));
 
-        l.mean_delta = calloc(n, sizeof(float));
-        l.variance_delta = calloc(n, sizeof(float));
+        l.mean_delta = malloc(n*sizeof(float));
+        l.variance_delta = malloc(n*sizeof(float));
 
-        l.rolling_mean = calloc(n, sizeof(float));
-        l.rolling_variance = calloc(n, sizeof(float));
-        l.x = calloc(l.batch*l.outputs, sizeof(float));
-        l.x_norm = calloc(l.batch*l.outputs, sizeof(float));
+        l.rolling_mean = malloc(n*sizeof(float));
+        l.rolling_variance = malloc(n*sizeof(float));
+        l.x = malloc(l.batch*l.outputs*sizeof(float));
+        l.x_norm = malloc(l.batch*l.outputs*sizeof(float));
     }
     if(adam){
         l.adam = 1;
-        l.m = calloc(c*n*size*size, sizeof(float));
-        l.v = calloc(c*n*size*size, sizeof(float));
+        l.m = malloc(c*n*size*size*sizeof(float));
+        l.v = malloc(c*n*size*size*sizeof(float));
     }
 
 #ifdef GPU
@@ -404,8 +406,9 @@ convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int
 
     //fprintf(stderr, "conv  %5d %2d x%2d /%2d  %4d x%4d x%4d   ->  %4d x%4d x%4d\n", n, size, size, stride, w, h, c, l.out_w, l.out_h, l.out_c);
     l.bflops = (2.0 * l.n * l.size*l.size*l.c * l.out_h*l.out_w) / 1000000000.;
-    if (l.xnor) fprintf(stderr, "convX ");
-    else  fprintf(stderr, "conv  ");
+    if (l.xnor && l.use_bin_output) fprintf(stderr, "convXB");
+    else if (l.xnor) fprintf(stderr, "convX ");
+    else fprintf(stderr, "conv  ");
     fprintf(stderr, "%5d %2d x%2d /%2d  %4d x%4d x%4d   ->  %4d x%4d x%4d %5.3f BF\n", n, size, size, stride, w, h, c, l.out_w, l.out_h, l.out_c, l.bflops);
 
     return l;
@@ -428,7 +431,7 @@ void denormalize_convolutional_layer(convolutional_layer l)
 
 void test_convolutional_layer()
 {
-    convolutional_layer l = make_convolutional_layer(1, 5, 5, 3, 2, 5, 2, 1, LEAKY, 1, 0, 0, 0);
+    convolutional_layer l = make_convolutional_layer(1, 5, 5, 3, 2, 5, 2, 1, LEAKY, 1, 0, 0, 0, 0);
     l.batch_normalize = 1;
     float data[] = {1,1,1,1,1,
         1,1,1,1,1,
@@ -671,6 +674,7 @@ size_t binary_transpose_align_input(int k, int n, float *b, char **t_bit_input, 
 
 void forward_convolutional_layer(convolutional_layer l, network_state state)
 {
+    //printf("forward_convolutional_layer\n");
     int out_h = convolutional_out_height(l);
     int out_w = convolutional_out_width(l);
     int i;
