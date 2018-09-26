@@ -6,14 +6,7 @@
 #include <stddef.h>
 
 
-/*int roundup(float *fp_number)
-{
-    int fx_number   =   (int)(*fp_number);
-
-    if(fp_number-(*fx_number)>=0.5)    fx_number++;
-
-    return  fx_number;
-}*/
+int roundup(float fp_number);
 
 int float2fix(float FloatPointValue);
 

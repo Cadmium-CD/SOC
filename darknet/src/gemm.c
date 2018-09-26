@@ -25,7 +25,7 @@ int roundup(float fp_number)
 int float2fix(float FloatPointValue)
 {
     int scale = 8;
-    int result = (int)(FloatPointValue*(1<<scale));
+    int result = (int)(round(FloatPointValue*(1<<scale)));
     return result;
 
 
@@ -896,7 +896,7 @@ void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
                 __m256i xor256 = _mm256_xor_si256(a_bit256, b_bit256);  // xnor = not(xor(a,b))
                 __m256i c_bit256 = _mm256_andnot_si256(xor256, all_1);  // can be optimized - we can do other NOT for wegihts once and do not do this NOT
 
-                count_sum = _mm256_add_epi64(count256(c_bit256), count_sum);    //  Mula�s algorithm
+                count_sum = _mm256_add_epi64(count256(c_bit256), count_sum);    //  Mula?s algorithm
 
                 //count += popcnt256(c_bit256);
 
@@ -1611,18 +1611,13 @@ void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, i
 //         }
 //     }
 // }
-void gemm_nn(int M, int N, int K, float ALPHA,
-    float *A, int lda,
-    float *B, int ldb,
-    float *C, int ldc)
+void gemm_nn(int M, int N, int K, int ALPHA,
+    int *A, int lda,
+    int *B, int ldb,
+    int *C, int ldc)
 {
-		int ALPHA_1 = float2fix(ALPHA);
-    int i, j, k, q, p;
-    int A_1[M*K];
-		for(q=0;q<M*K;q++)
-		{
-			A_1[q] = (int)round(A[q] * (1 << 8));
-		}
+	int i, j, k;
+
 /*	for (p = 0; p < N*K;p++)
 	{
     //if(p<1010 & p>1000) printf("float = %f  ", B[p]);
@@ -1637,13 +1632,10 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     // }
     for (i = 0; i < M; ++i) {
         for (k = 0; k < K; ++k) {
-		    //register float A_PART_1 = fix2float(ALPHA_1*float2fix(A[i*lda + k]),2);
-    		  register float A_PART_1 = (float)(ALPHA_1*A_1[i*lda + k])/(1 << 16);
+    		  register int A_PART = ALPHA*A[i*lda + k];
             for (j = 0; j < N; ++j) {
-								C[i*ldc + j] += (float)(float2fix(A_PART_1) * float2fix(B[k*ldb + j]))/(1<<16);
-								//C[i*ldc + j] = fix2float(C[i*ldc + j]);
-                /*C[i*ldc + j] += fix2float(A_PART*float2fix(B[k*ldb + j]));
-								B[K*ldb + j] = fix2float(B[k*ldb + j]);*/
+								C[i*ldc + j] += A_PART * B[k*ldb + j];
+								//printf("c = %d\n",C[i*ldc + j]);
             }
         }
     }
@@ -2139,7 +2131,7 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *C, int ldc)
 {
 
-    //printf("cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
+    printf("cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
     if (BETA != 1){
         int i, j;
         for(i = 0; i < M; ++i){
@@ -2148,12 +2140,32 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
             }
         }
     }
+		
+//fixed variable memory allocation
+		int *A_1 = malloc(M*K*sizeof(int));		
+		int *B_1 = malloc(K*N*sizeof(int));
+		int *C_1 = malloc(M*N*sizeof(int));
+		int Alpha_1 = (int)ALPHA; 
 
-    int t;
+//float2fix conversion 
+//for A
+    int i;
+		for(i=0;i<M*K;i++)
+		{
+			A_1[i] = float2fix(A[i]);
+		}
+//for B
+		i = 0;
+		for(i=N*K;i>0;i--)
+		{
+			B_1[i] = (int)(B[i] * (1 << 8));
+		}
+
+		int t;
     #pragma omp parallel for
     for (t = 0; t < M; ++t) {
-        if (!TA && !TB)
-            gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);
+        if (!TA && !TB){
+            gemm_nn(1, N, K, Alpha_1, A_1 + t*lda, lda, B_1, ldb, C_1 + t*ldc, ldc);}
         else if (TA && !TB)
             gemm_tn(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
         else if (!TA && TB)
@@ -2161,7 +2173,34 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         else
             gemm_tt(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
     }
+
+/*int test_i;
+		for(test_i=0;test_i<10;test_i++)
+		{
+			printf("C_1()")
+		}*/
+//fix2float conversion 
+/*//for A
+    i = 0;
+		for(i=0;i<M*K;i++)
+		{
+			A[i] = fix2float(A_1[i],1);
+		}
+//for B
+		i = 0;
+		for(i=0;i<N*K;i++)
+		{
+			B[i] = fix2float(B_1[i],1);
+		}*/
+//for C
+		i = 0;
+		for(i=0;i<M*N;i++)
+		{
+			C[i] = fix2float(C_1[i],2);
+		}
 }
+
+
 
 #ifdef GPU
 
