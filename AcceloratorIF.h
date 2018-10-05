@@ -60,7 +60,7 @@ struct AcceloratorIF: sc_module
         SC_REPORT_ERROR("TLM-2", "Response error from b_transport");
 
       cout << "trans = { " << (cmd ? 'W' : 'R') << ", " << hex << i
-           << " } , data = " << hex << data << " at time " << sc_time_stamp()
+           << " } , data = " << hex << memcell[i] << " at time " << sc_time_stamp()
            << " delay = " << delay << endl;
 
       // Realize the delay annotated onto the transport call
@@ -77,7 +77,7 @@ struct AcceloratorIF: sc_module
   int lda = 4;
   int ldb = 3;
   int ldc = 3;
-  int* memcell[7] = {&A,&B,&C,M,&lda,&ldb,&ldc};
+  int* memcell[7] = {&A[0],&B[0],&C[0],&M,&lda,&ldb,&ldc};
 };
 
 #endif
