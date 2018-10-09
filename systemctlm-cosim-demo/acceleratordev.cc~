@@ -1,0 +1,101 @@
+/*
+ * A demo/debug device.
+ *
+ * Copyright (c) 2013 Xilinx Inc.
+ * Written by Edgar E. Iglesias
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+#define SC_INCLUDE_DYNAMIC_PROCESSES
+
+#include <inttypes.h>
+
+#include "tlm_utils/simple_initiator_socket.h"
+#include "tlm_utils/simple_target_socket.h"
+
+using namespace sc_core;
+using namespace std;
+
+#include "acceleratordev.h"
+#include <sys/types.h>
+#include <time.h>
+
+
+acceleratordev::acceleratordev(sc_module_name name)
+	: sc_module(name), mastersocket("mastersocket")
+{
+	SC_HAS_PROCESS(acceleratordev);
+	SC_THREAD(acc_thread);
+}
+
+void acceleratordev::acc_thread()
+{
+	int data;
+	//tlm::tlm_generic_payload trans = new tlm::tlm_generic_payload;
+	tlm::tlm_generic_payload trans;
+  sc_time delay = sc_time(10, SC_NS);
+	
+	for (int i = 32; i < 96; i += 4)
+    {
+
+      //tlm::tlm_command cmd = static_cast<tlm::tlm_command>(rand() % 2);
+	  tlm::tlm_command cmd = tlm::TLM_READ_COMMAND;
+      if (cmd == tlm::TLM_WRITE_COMMAND) data = 0x00100000 | i;
+
+      // Initialize 8 out of the 10 attributes, byte_enable_length and extensions being unused
+      trans.set_command( cmd );
+      trans.set_address( i );
+      trans.set_data_ptr( reinterpret_cast<unsigned char*>(&data) );
+      trans.set_data_length( 4 );
+      trans.set_streaming_width( 4 ); // = data_length to indicate no streaming
+      trans.set_byte_enable_ptr( 0 ); // 0 indicates unused
+      trans.set_dmi_allowed( false ); // Mandatory initial value
+      trans.set_response_status( tlm::TLM_INCOMPLETE_RESPONSE ); // Mandatory initial value
+
+      socket->b_transport( trans, delay );  // Blocking transport call
+
+      // Initiator obliged to check response status and delay
+      if ( trans.is_response_error() )
+        SC_REPORT_ERROR("TLM-2", "Response error from b_transport");
+
+      cout << "trans = { " << (cmd ? 'W' : 'R') << ", " << hex << i
+           << " } , data = " << hex << data << " at time " << sc_time_stamp()
+           << " delay = " << delay << endl;
+
+      // Realize the delay annotated onto the transport call
+      wait(delay);
+    }
+
+	/*if (byt != 0) {
+		trans.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
+		return;
+	}
+
+	if (len > 4 || wid < len) {
+		trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+		return;
+	}*/
+
+	// Pretend this is slow!execution time
+	delay += sc_time(1, SC_US);
+
+	
+}
+
