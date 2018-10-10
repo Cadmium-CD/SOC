@@ -104,7 +104,7 @@ int Drv_waitfunction()
 
 void Drv_outputdata(*data, int height, int width, int ld)
 {
-  int* temp_data[height*width];
+  int* temp_data = malloc(height*width*sizeof(int));
   int i,j;
   memcpy(temp_data, (int*)(base-(height*width*4)+4),sizeof(temp_data)); //copy data back
   // cut data to subblock
