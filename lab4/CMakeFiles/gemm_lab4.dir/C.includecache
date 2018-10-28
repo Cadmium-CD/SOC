@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/shitongzhou/desktop/lab4/src/gemm_lab4.c
+gemm_lab4.h
+/Users/shitongzhou/desktop/lab4/src/gemm_lab4.h
+stdlib.h
+-
+stdio.h
+-
+math.h
+-
+float.h
+-
+string.h
+-
+omp.h
+-
+
+/Users/shitongzhou/desktop/lab4/src/gemm_lab4.h
+math.h
+-
+stdint.h
+-
+stddef.h
+-
+
+/Users/shitongzhou/desktop/lab4/src/testbench.c
+gemm_lab4.h
+/Users/shitongzhou/desktop/lab4/src/gemm_lab4.h
+stdlib.h
+-
+stdio.h
+-
+

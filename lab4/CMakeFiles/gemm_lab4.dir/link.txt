@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/cc  -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.14.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names -pthread CMakeFiles/gemm_lab4.dir/src/gemm_lab4.c.o CMakeFiles/gemm_lab4.dir/src/testbench.c.o  -o bin/gemm_lab4 
