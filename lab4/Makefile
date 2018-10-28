@@ -8,3 +8,5 @@ OBJ = src/gemm_lab4.o src/testbench.o
 
 testbench: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
+clean :
+    	rm  src/testbench.o src/gemm_lab4.o 
