@@ -4,10 +4,10 @@
 
 int main()
 {
-	int lda = 2;
-	int ldb = 4;
-	int ldc = 4;
-	int M = 3;
+	int lda = 20;
+	int ldb = 1000;
+	int ldc = 1000;
+	int M = 100;
 	int N = ldb;
 	int K = lda;
 	int *A = malloc(M*lda*sizeof(int));
@@ -19,12 +19,12 @@ int main()
 	for (i = 0; i < M * lda; ++i)
 		A[i] = i;
 	for (i = 0; i < lda * ldb; ++i)
-		B[i] = i*2;
+		B[i] = 1;
 
 	gemm_lab4(lda,ldb,ldc,M,N,K,A,B,C);
 	for (i = 0; i < M * ldc; ++i)
 	{
-		printf("%d\t", C[i]);
+		//printf("%d\t", C[i]);
 	}
 
 	return 0;
